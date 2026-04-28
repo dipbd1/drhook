@@ -19,7 +19,7 @@ export async function sendHttpDelivery(
       method: 'POST',
       headers: {
         'content-type': 'application/json',
-        'user-agent': 'durable-webhooks',
+        'user-agent': 'drhook',
       },
       body: JSON.stringify({
         id: delivery.id,

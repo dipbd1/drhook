@@ -1,12 +1,12 @@
 {
-  "name": "durable-webhooks-express-example",
+  "name": "drhook-express-example",
   "private": true,
   "type": "module",
   "scripts": {
     "dev": "tsx src/server.ts"
   },
   "dependencies": {
-    "durable-webhooks": "file:../..",
+    "drhook": "file:../..",
     "express": "^4.21.2"
   },
   "devDependencies": {

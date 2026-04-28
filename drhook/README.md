@@ -1,19 +1,19 @@
-# durable-webhooks
+# drhook
 
 Small durable webhook delivery for Node.js 20+.
 
-`durable-webhooks` stores webhook work in SQLite before delivery, retries failures with exponential backoff, and restores `in_progress` work to `pending` when the process restarts.
+`drhook` stores webhook work in SQLite before delivery, retries failures with exponential backoff, and restores `in_progress` work to `pending` when the process restarts.
 
 ## Install
 
 ```bash
-npm install durable-webhooks
+npm install drhook
 ```
 
 ## Quickstart
 
 ```ts
-import { createWebhooks } from 'durable-webhooks';
+import { createWebhooks } from 'drhook';
 
 const webhooks = createWebhooks({
   databaseUrl: './webhooks.sqlite',

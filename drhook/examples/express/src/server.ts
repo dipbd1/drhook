@@ -96,7 +96,7 @@ app.use(
 );
 
 const server = app.listen(port, () => {
-  console.log(`durable-webhooks example listening on http://localhost:${port}`);
+  console.log(`drhook example listening on http://localhost:${port}`);
 });
 
 async function shutdown(): Promise<void> {

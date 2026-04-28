@@ -1,7 +1,7 @@
 export { createWebhooks } from './createWebhooks.js';
 export { SQLiteStorage } from './storage/SQLiteStorage.js';
 export { calculateRetryDelayMs } from './delivery/retry.js';
-export { DurableWebhooksError, ValidationError, DeliveryError } from './errors.js';
+export { DrhookError, ValidationError, DeliveryError } from './errors.js';
 export type {
   Delivery,
   DeliveryAttempt,

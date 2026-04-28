@@ -12,7 +12,7 @@ describe('createWebhooks', () => {
   let server: Server | null = null;
 
   beforeEach(async () => {
-    temporaryDirectory = await mkdtemp(join(tmpdir(), 'durable-webhooks-'));
+    temporaryDirectory = await mkdtemp(join(tmpdir(), 'drhook-'));
   });
 
   afterEach(async () => {

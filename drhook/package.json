@@ -1,5 +1,5 @@
 {
-  "name": "durable-webhooks",
+  "name": "drhook",
   "version": "0.1.0",
   "description": "Small durable webhook delivery library for Node.js.",
   "type": "module",
