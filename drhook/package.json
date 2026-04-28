@@ -25,6 +25,7 @@
     "build": "tsup",
     "dev": "tsx examples/express/src/server.ts",
     "test": "vitest run",
+    "test:integration": "node ../test-scripts/run-express-integration.mjs",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
