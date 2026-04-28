@@ -2,7 +2,7 @@ import { DeliveryError } from '../errors.js';
 import type { StorageAdapter } from '../storage/StorageAdapter.js';
 import type { Delivery } from '../types.js';
 import { sendHttpDelivery } from './http.js';
-import { calculateRetryDelayMs } from './retry.js';
+import { calculateRetryDelayMs, isRetryableStatusCode } from './retry.js';
 
 export interface DeliveryWorkerOptions {
   storage: StorageAdapter;
@@ -10,6 +10,8 @@ export interface DeliveryWorkerOptions {
   deliveryTimeoutMs: number;
   pollIntervalMs: number;
   batchSize: number;
+  deliveryConcurrency: number;
+  signingSecret?: string;
 }
 
 export class DeliveryWorker {
@@ -18,8 +20,10 @@ export class DeliveryWorker {
   private readonly deliveryTimeoutMs: number;
   private readonly pollIntervalMs: number;
   private readonly batchSize: number;
+  private readonly deliveryConcurrency: number;
+  private readonly signingSecret: string | undefined;
   private timer: NodeJS.Timeout | null = null;
-  private isProcessing = false;
+  private processingPromise: Promise<void> | null = null;
 
   constructor(options: DeliveryWorkerOptions) {
     this.storage = options.storage;
@@ -27,6 +31,8 @@ export class DeliveryWorker {
     this.deliveryTimeoutMs = options.deliveryTimeoutMs;
     this.pollIntervalMs = options.pollIntervalMs;
     this.batchSize = options.batchSize;
+    this.deliveryConcurrency = options.deliveryConcurrency;
+    this.signingSecret = options.signingSecret;
   }
 
   async start(): Promise<void> {
@@ -37,35 +43,43 @@ export class DeliveryWorker {
     await this.processDueDeliveries();
 
     this.timer = setInterval(() => {
-      void this.processDueDeliveries();
+      void this.processDueDeliveries().catch(() => {
+        // Keep interval-triggered failures from becoming unhandled rejections.
+      });
     }, this.pollIntervalMs);
   }
 
   async stop(): Promise<void> {
-    if (!this.timer) {
-      return;
+    if (this.timer) {
+      clearInterval(this.timer);
+      this.timer = null;
     }
 
-    clearInterval(this.timer);
-    this.timer = null;
+    await this.processingPromise;
   }
 
   async processDueDeliveries(now = new Date()): Promise<void> {
-    if (this.isProcessing) {
-      return;
+    if (this.processingPromise) {
+      return this.processingPromise;
     }
 
-    this.isProcessing = true;
-
-    try {
-      const dueDeliveries = await this.storage.fetchDueDeliveries(this.batchSize, now);
-
-      for (const delivery of dueDeliveries) {
-        await this.processDelivery(delivery);
+    const processingPromise = this.processDueDeliveriesOnce(now).finally(() => {
+      if (this.processingPromise === processingPromise) {
+        this.processingPromise = null;
       }
-    } finally {
-      this.isProcessing = false;
-    }
+    });
+
+    this.processingPromise = processingPromise;
+
+    return processingPromise;
+  }
+
+  private async processDueDeliveriesOnce(now: Date): Promise<void> {
+    const dueDeliveries = await this.storage.fetchDueDeliveries(this.batchSize, now);
+
+    await processWithConcurrency(dueDeliveries, this.deliveryConcurrency, (delivery) =>
+      this.processDelivery(delivery),
+    );
   }
 
   private async processDelivery(delivery: Delivery): Promise<void> {
@@ -76,7 +90,11 @@ export class DeliveryWorker {
     }
 
     try {
-      const result = await sendHttpDelivery(claimedDelivery, this.deliveryTimeoutMs);
+      const result = await sendHttpDelivery(
+        claimedDelivery,
+        this.deliveryTimeoutMs,
+        this.signingSecret,
+      );
       await this.storage.recordDeliverySuccess(claimedDelivery.id, result.statusCode);
     } catch (error) {
       await this.recordFailedAttempt(claimedDelivery, error);
@@ -85,11 +103,6 @@ export class DeliveryWorker {
 
   private async recordFailedAttempt(delivery: Delivery, error: unknown): Promise<void> {
     const attempts = delivery.attempts + 1;
-    const reachedFinalAttempt = attempts >= this.maxAttempts;
-    const finalStatus = reachedFinalAttempt ? 'failed' : 'pending';
-    const delayMs = calculateRetryDelayMs(attempts);
-    const nextAttemptAt = reachedFinalAttempt ? null : new Date(Date.now() + delayMs);
-
     let statusCode: number | null = null;
     let message = 'Webhook delivery failed';
 
@@ -100,6 +113,13 @@ export class DeliveryWorker {
       message = error.message;
     }
 
+    const shouldRetry = isRetryableStatusCode(statusCode);
+    const reachedFinalAttempt = attempts >= this.maxAttempts;
+    const finalFailure = reachedFinalAttempt || !shouldRetry;
+    const finalStatus = finalFailure ? 'failed' : 'pending';
+    const delayMs = calculateRetryDelayMs(attempts);
+    const nextAttemptAt = finalFailure ? null : new Date(Date.now() + delayMs);
+
     await this.storage.recordDeliveryFailure({
       deliveryId: delivery.id,
       statusCode,
@@ -108,5 +128,31 @@ export class DeliveryWorker {
       nextAttemptAt,
       finalStatus,
     });
+  }
+}
+
+async function processWithConcurrency<T>(
+  items: T[],
+  concurrency: number,
+  handler: (item: T) => Promise<void>,
+): Promise<void> {
+  let nextIndex = 0;
+  const workerCount = Math.min(concurrency, items.length);
+
+  const workers = Array.from({ length: workerCount }, async () => {
+    while (nextIndex < items.length) {
+      const index = nextIndex;
+      nextIndex += 1;
+      await handler(items[index]!);
+    }
+  });
+
+  const results = await Promise.allSettled(workers);
+  const rejection = results.find(
+    (result): result is PromiseRejectedResult => result.status === 'rejected',
+  );
+
+  if (rejection) {
+    throw rejection.reason;
   }
 }

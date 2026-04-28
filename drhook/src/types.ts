@@ -6,6 +6,8 @@ export interface WebhooksConfig {
   deliveryTimeoutMs?: number;
   pollIntervalMs?: number;
   batchSize?: number;
+  deliveryConcurrency?: number;
+  signingSecret?: string;
 }
 
 export interface Subscription {

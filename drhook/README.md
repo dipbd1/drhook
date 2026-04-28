@@ -19,6 +19,8 @@ const webhooks = createWebhooks({
   databaseUrl: './webhooks.sqlite',
   maxAttempts: 8,
   deliveryTimeoutMs: 5000,
+  deliveryConcurrency: 5,
+  signingSecret: process.env.WEBHOOK_SIGNING_SECRET,
 });
 
 await webhooks.start();
@@ -42,6 +44,16 @@ Webhook requests are sent as JSON:
 }
 ```
 
+When `signingSecret` is configured, webhook requests include:
+
+```text
+x-drhook-signature: sha256=<hmac>
+x-drhook-timestamp: <unix-seconds>
+```
+
+The HMAC is `sha256` over `<timestamp>.<raw request body>`. Receivers should verify the
+signature against the exact raw JSON body they received and reject stale timestamps.
+
 ## API
 
 ```ts
@@ -53,6 +65,8 @@ webhooks.stop();
 webhooks.listSubscriptions();
 webhooks.listDeliveries();
 ```
+
+`deliveryConcurrency` controls how many queued webhooks are sent at the same time from each fetched batch. The default is `5`.
 
 ## Development
 

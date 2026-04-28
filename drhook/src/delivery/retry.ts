@@ -7,6 +7,7 @@ export interface RetryOptions {
 const DEFAULT_BASE_DELAY_MS = 1_000;
 const DEFAULT_MAX_DELAY_MS = 60_000;
 const DEFAULT_JITTER_RATIO = 0.2;
+const NON_RETRYABLE_STATUS_CODES = new Set([400, 401, 403]);
 
 export function calculateRetryDelayMs(attempts: number, options: RetryOptions = {}): number {
   const baseDelayMs = options.baseDelayMs ?? DEFAULT_BASE_DELAY_MS;
@@ -31,4 +32,12 @@ export function calculateRetryDelayMs(attempts: number, options: RetryOptions = 
   const delayWithJitterMs = minimumDelayMs + Math.random() * (maximumDelayMs - minimumDelayMs);
 
   return Math.round(Math.min(delayWithJitterMs, maxDelayMs));
+}
+
+export function isRetryableStatusCode(statusCode: number | null): boolean {
+  if (statusCode === null) {
+    return true;
+  }
+
+  return !NON_RETRYABLE_STATUS_CODES.has(statusCode);
 }

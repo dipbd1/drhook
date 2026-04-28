@@ -33,6 +33,7 @@ interface DeliveryRow {
 
 export class SQLiteStorage implements StorageAdapter {
   private readonly database: DatabaseConnection;
+  private isClosed = false;
 
   constructor(databaseUrl: string) {
     if (databaseUrl !== ':memory:') {
@@ -89,7 +90,12 @@ export class SQLiteStorage implements StorageAdapter {
   }
 
   async close(): Promise<void> {
+    if (this.isClosed) {
+      return;
+    }
+
     this.database.close();
+    this.isClosed = true;
   }
 
   async resetInProgressDeliveries(): Promise<void> {

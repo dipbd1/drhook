@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { calculateRetryDelayMs } from '../src/delivery/retry.js';
+import { calculateRetryDelayMs, isRetryableStatusCode } from '../src/delivery/retry.js';
 
 describe('calculateRetryDelayMs', () => {
   it('returns zero before the first failed attempt', () => {
@@ -49,5 +49,19 @@ describe('calculateRetryDelayMs', () => {
     });
 
     expect(delay).toBe(120);
+  });
+});
+
+describe('isRetryableStatusCode', () => {
+  it('does not retry permanent client failures', () => {
+    expect(isRetryableStatusCode(400)).toBe(false);
+    expect(isRetryableStatusCode(401)).toBe(false);
+    expect(isRetryableStatusCode(403)).toBe(false);
+  });
+
+  it('retries transient or unknown failures', () => {
+    expect(isRetryableStatusCode(429)).toBe(true);
+    expect(isRetryableStatusCode(500)).toBe(true);
+    expect(isRetryableStatusCode(null)).toBe(true);
   });
 });

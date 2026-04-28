@@ -8,6 +8,7 @@ const DEFAULT_MAX_ATTEMPTS = 8;
 const DEFAULT_DELIVERY_TIMEOUT_MS = 5_000;
 const DEFAULT_POLL_INTERVAL_MS = 1_000;
 const DEFAULT_BATCH_SIZE = 25;
+const DEFAULT_DELIVERY_CONCURRENCY = 5; // this number is controversial, but it's a good starting point
 
 export function createWebhooks(config: WebhooksConfig): ReliableWebhooks {
   validateConfig(config);
@@ -19,6 +20,8 @@ export function createWebhooks(config: WebhooksConfig): ReliableWebhooks {
     deliveryTimeoutMs: config.deliveryTimeoutMs ?? DEFAULT_DELIVERY_TIMEOUT_MS,
     pollIntervalMs: config.pollIntervalMs ?? DEFAULT_POLL_INTERVAL_MS,
     batchSize: config.batchSize ?? DEFAULT_BATCH_SIZE,
+    deliveryConcurrency: config.deliveryConcurrency ?? DEFAULT_DELIVERY_CONCURRENCY,
+    signingSecret: config.signingSecret,
   });
 
   let isInitialized = false;
@@ -72,7 +75,11 @@ export function createWebhooks(config: WebhooksConfig): ReliableWebhooks {
     },
 
     async stop() {
-      await worker.stop();
+      try {
+        await worker.stop();
+      } finally {
+        await storage.close();
+      }
     },
 
     async listSubscriptions() {
@@ -102,6 +109,11 @@ function validateConfig(config: WebhooksConfig): void {
   validatePositiveInteger(config.deliveryTimeoutMs, 'deliveryTimeoutMs');
   validatePositiveInteger(config.pollIntervalMs, 'pollIntervalMs');
   validatePositiveInteger(config.batchSize, 'batchSize');
+  validatePositiveInteger(config.deliveryConcurrency, 'deliveryConcurrency');
+
+  if (config.signingSecret !== undefined && config.signingSecret.trim().length === 0) {
+    throw new ValidationError('signingSecret must not be empty');
+  }
 }
 
 function validatePositiveInteger(value: number | undefined, name: string): void {
